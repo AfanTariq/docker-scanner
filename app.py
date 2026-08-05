@@ -52,12 +52,255 @@ client, error = connect_docker()
 
 # ── Header ────────────────────────────────────────────────────────────────────
 st.markdown("""
-<div class="main-header">
-  <h1 style="margin:0;font-size:26px;color:white;">🔒 Docker Security Scanner</h1>
-  <p style="margin:4px 0 0;opacity:.75;font-size:13px;color:white;">
-    AI Powered Container Security Platform
-  </p>
-</div>
+<style>
+
+/* ── Base app background ─────────────────────────────── */
+.stApp {
+    background-color: #0f0f1a !important;
+}
+
+/* ── Main header banner ──────────────────────────────── */
+.main-header {
+    background: linear-gradient(90deg, #1a1a2e, #16213e);
+    padding: 20px 24px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+}
+
+/* ── Fix badges ──────────────────────────────────────── */
+.fix-yes {
+    background:#d4edda;
+    color:#155724;
+    padding:2px 8px;
+    border-radius:4px;
+    font-size:12px;
+    font-weight:bold;
+}
+.fix-no {
+    background:#f8d7da;
+    color:#721c24;
+    padding:2px 8px;
+    border-radius:4px;
+    font-size:12px;
+    font-weight:bold;
+}
+
+/* ── Chat bubbles ────────────────────────────────────── */
+.chat-user {
+    background:#1e3a5f;
+    color:#ffffff;
+    border-radius:10px;
+    padding:10px 14px;
+    margin:6px 0;
+    max-width:80%;
+    margin-left:auto;
+}
+.chat-ai {
+    background:#1e2d1e;
+    color:#ffffff;
+    border-radius:10px;
+    padding:10px 14px;
+    margin:6px 0;
+    max-width:80%;
+}
+
+/* ── Expander dark theme fix ─────────────────────────── */
+div[data-testid="stExpander"] {
+    background-color: #1e1e2e !important;
+    border: 1px solid #333355 !important;
+    border-radius: 8px !important;
+}
+div[data-testid="stExpander"] summary {
+    background-color: #1e1e2e !important;
+    color: #ffffff !important;
+}
+div[data-testid="stExpander"] > div {
+    background-color: #1e1e2e !important;
+    color: #e0e0e0 !important;
+}
+
+/* ── Alert boxes ─────────────────────────────────────── */
+div[data-testid="stInfo"] {
+    background-color: #1a2744 !important;
+    color: #90caf9 !important;
+    border-radius: 8px !important;
+}
+div[data-testid="stWarning"] {
+    background-color: #332200 !important;
+    color: #ffcc80 !important;
+    border-radius: 8px !important;
+}
+div[data-testid="stSuccess"] {
+    background-color: #1a3322 !important;
+    color: #a5d6a7 !important;
+    border-radius: 8px !important;
+}
+div[data-testid="stError"] {
+    background-color: #3e1111 !important;
+    color: #ef9a9a !important;
+    border-radius: 8px !important;
+}
+
+/* ── Sidebar ─────────────────────────────────────────── */
+section[data-testid="stSidebar"] {
+    background-color: #12121f !important;
+}
+
+/* ── Metric cards ────────────────────────────────────── */
+div[data-testid="stMetric"] {
+    background-color: #1e1e2e !important;
+    border-radius: 8px !important;
+    padding: 12px !important;
+    border: 1px solid #333355 !important;
+}
+div[data-testid="stMetricLabel"] {
+    color: #a0a0c0 !important;
+}
+div[data-testid="stMetricValue"] {
+    color: #ffffff !important;
+}
+
+/* ── Code blocks ─────────────────────────────────────── */
+div[data-testid="stCode"] {
+    background-color: #0d1117 !important;
+    border-radius: 6px !important;
+    border: 1px solid #30363d !important;
+}
+pre {
+    background-color: #0d1117 !important;
+    color: #e6edf3 !important;
+}
+
+/* ── Selectbox ───────────────────────────────────────── */
+div[data-testid="stSelectbox"] > div {
+    background-color: #1e1e2e !important;
+    border-color: #333355 !important;
+    color: #ffffff !important;
+}
+
+/* ── Radio buttons ───────────────────────────────────── */
+div[data-testid="stRadio"] label {
+    color: #e0e0e0 !important;
+}
+
+/* ── Checkboxes ──────────────────────────────────────── */
+div[data-testid="stCheckbox"] label {
+    color: #e0e0e0 !important;
+}
+
+/* ── Text input ──────────────────────────────────────── */
+div[data-testid="stTextInput"] input {
+    background-color: #1e1e2e !important;
+    color: #ffffff !important;
+    border-color: #333355 !important;
+    border-radius: 6px !important;
+}
+
+/* ── Text area ───────────────────────────────────────── */
+div[data-testid="stTextArea"] textarea {
+    background-color: #1e1e2e !important;
+    color: #ffffff !important;
+    border-color: #333355 !important;
+    border-radius: 6px !important;
+}
+
+/* ── File uploader ───────────────────────────────────── */
+div[data-testid="stFileUploader"] {
+    background-color: #1e1e2e !important;
+    border: 1px dashed #333355 !important;
+    border-radius: 8px !important;
+    color: #e0e0e0 !important;
+}
+
+/* ── Tabs ────────────────────────────────────────────── */
+div[data-testid="stTabs"] button {
+    color: #a0a0c0 !important;
+    background-color: transparent !important;
+}
+div[data-testid="stTabs"] button[aria-selected="true"] {
+    color: #ffffff !important;
+    border-bottom-color: #2563eb !important;
+}
+div[data-testid="stTabs"] {
+    background-color: #0f0f1a !important;
+}
+
+/* ── Progress bar ────────────────────────────────────── */
+div[data-testid="stProgressBar"] > div {
+    background-color: #1e1e2e !important;
+    border-radius: 4px !important;
+}
+div[data-testid="stProgressBar"] > div > div {
+    background-color: #2563eb !important;
+    border-radius: 4px !important;
+}
+
+/* ── Divider ─────────────────────────────────────────── */
+hr {
+    border-color: #333355 !important;
+}
+
+/* ── General text ────────────────────────────────────── */
+.stMarkdown p {
+    color: #e0e0e0 !important;
+}
+.stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+    color: #ffffff !important;
+}
+label {
+    color: #e0e0e0 !important;
+}
+
+/* ── Spinner ─────────────────────────────────────────── */
+div[data-testid="stSpinner"] {
+    color: #2563eb !important;
+}
+
+/* ── Line chart ──────────────────────────────────────── */
+div[data-testid="stArrowVegaLiteChart"] {
+    background-color: #1e1e2e !important;
+    border-radius: 8px !important;
+    padding: 8px !important;
+}
+
+/* ── Download button ─────────────────────────────────── */
+div[data-testid="stDownloadButton"] button {
+    background-color: #2563eb !important;
+    color: #ffffff !important;
+    border-radius: 8px !important;
+    border: none !important;
+    font-weight: 600 !important;
+}
+div[data-testid="stDownloadButton"] button:hover {
+    background-color: #1d4ed8 !important;
+}
+
+/* ── Primary buttons ─────────────────────────────────── */
+div[data-testid="stButton"] button[kind="primary"] {
+    background-color: #e53935 !important;
+    color: #ffffff !important;
+    border-radius: 8px !important;
+    border: none !important;
+    font-weight: 600 !important;
+}
+div[data-testid="stButton"] button[kind="primary"]:hover {
+    background-color: #c62828 !important;
+}
+
+/* ── Secondary buttons ───────────────────────────────── */
+div[data-testid="stButton"] button[kind="secondary"] {
+    background-color: #1e1e2e !important;
+    color: #ffffff !important;
+    border: 1px solid #333355 !important;
+    border-radius: 8px !important;
+}
+
+/* ── Caption text ────────────────────────────────────── */
+div[data-testid="stCaptionContainer"] {
+    color: #a0a0c0 !important;
+}
+
+</style>
 """, unsafe_allow_html=True)
 
 if error:
@@ -625,53 +868,123 @@ with tab7:
 # ════════════════════════════════════════════════════════════════════════════
 # TAB 8 — Live Monitoring (NEW)
 # ════════════════════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════════════
+# TAB 8 — Live Monitoring (FIXED)
+# ════════════════════════════════════════════════════════════════════════════
 with tab8:
     st.subheader("📈 Live Container Resource Monitoring")
-    st.markdown("Real time CPU, memory, and network stats for running containers.")
+    st.markdown(
+        "Real time CPU, memory, network, and disk stats for running containers. "
+        "Start a container first if none are shown."
+    )
 
-    if client:
-        running = get_running_containers(client)
-        if not running:
-            st.info("No running containers. Start one with: docker run -d nginx:latest")
+    from monitoring import get_all_running_containers, get_container_stats, init_metrics_buffer, append_metrics
+
+    if not client:
+        st.error("Docker not connected.")
+    else:
+        all_containers, con_err = get_all_running_containers(client)
+
+        if con_err:
+            st.error(f"Error listing containers: {con_err}")
+
+        elif not all_containers:
+            st.warning("No running containers found.")
+            st.info("Start a container first:")
+            st.code("docker run -d --name test-nginx -p 8080:80 nginx:latest")
+
         else:
-            names = [c['name'] for c in running]
-            mon_container = st.selectbox("Select container to monitor", names)
+            names       = [c['name'] for c in all_containers]
+            mon_container = st.selectbox(
+                "Select container to monitor", names, key="mon_sel")
 
-            col1, col2 = st.columns([1,3])
+            selected_info = next(
+                (c for c in all_containers if c['name'] == mon_container), None)
+
+            if selected_info:
+                c1, c2, c3 = st.columns(3)
+                c1.markdown(f"**Container:** `{selected_info['name']}`")
+                c2.markdown(f"**Image:** `{selected_info['image']}`")
+                c3.markdown(f"**Status:** 🟢 `{selected_info['status']}`")
+
+            st.divider()
+
+            col1, col2, col3 = st.columns([1, 1, 2])
             with col1:
-                auto_refresh = st.checkbox("Auto refresh every 3s", value=False)
+                manual_refresh = st.button(
+                    "🔄 Refresh Stats", use_container_width=True, type="primary")
             with col2:
-                manual_refresh = st.button("🔄 Refresh Now")
+                auto_refresh = st.checkbox("Auto refresh every 4s", value=False)
+            with col3:
+                if st.button("🗑️ Reset Chart", use_container_width=False):
+                    st.session_state['metrics_buffer'] = init_metrics_buffer()
+                    st.rerun()
 
             if 'metrics_buffer' not in st.session_state:
                 st.session_state['metrics_buffer'] = init_metrics_buffer()
 
             if manual_refresh or auto_refresh:
                 stats, err = get_container_stats(client, mon_container)
+
                 if err:
-                    st.error(f"Error: {err}")
+                    st.error(f"Monitoring error: {err}")
+                    st.info(
+                        "Make sure the container is running. "
+                        "Check with: docker ps"
+                    )
                 else:
                     st.session_state['metrics_buffer'] = append_metrics(
                         st.session_state['metrics_buffer'], stats
                     )
 
-                    c1, c2, c3, c4 = st.columns(4)
-                    c1.metric("🖥️ CPU", f"{stats['cpu_percent']}%")
-                    c2.metric("💾 Memory", f"{stats['mem_percent']}%")
-                    c3.metric("📥 Net In", f"{stats['net_rx_mb']} MB")
-                    c4.metric("📤 Net Out", f"{stats['net_tx_mb']} MB")
+                    st.markdown("### Current Stats")
+                    m1, m2, m3, m4 = st.columns(4)
+                    m1.metric(
+                        "CPU Usage",
+                        f"{stats['cpu_percent']}%",
+                        help="Current CPU utilization"
+                    )
+                    m2.metric(
+                        "Memory Usage",
+                        f"{stats['mem_percent']}%",
+                        help=f"{stats['mem_usage_mb']} MB of {stats['mem_limit_mb']} MB"
+                    )
+                    m3.metric(
+                        "Network In",
+                        f"{stats['net_rx_mb']} MB",
+                        help="Total bytes received"
+                    )
+                    m4.metric(
+                        "Network Out",
+                        f"{stats['net_tx_mb']} MB",
+                        help="Total bytes sent"
+                    )
+
+                    m5, m6, m7, m8 = st.columns(4)
+                    m5.metric("Memory Used",  f"{stats['mem_usage_mb']} MB")
+                    m6.metric("Memory Limit", f"{stats['mem_limit_mb']} MB")
+                    m7.metric("Disk Read",    f"{stats['disk_read_mb']} MB")
+                    m8.metric("Disk Write",   f"{stats['disk_write_mb']} MB")
 
                     buf = st.session_state['metrics_buffer']
+
                     if len(buf['cpu']) > 1:
+                        st.markdown("### CPU and Memory Over Time")
                         st.line_chart({
-                            'CPU %': list(buf['cpu']),
+                            'CPU %':    list(buf['cpu']),
                             'Memory %': list(buf['mem'])
                         })
 
-            if auto_refresh:
-                time.sleep(3)
-                st.rerun()
+                        st.markdown("### Network Traffic Over Time")
+                        st.line_chart({
+                            'Net In MB':  list(buf['net_rx']),
+                            'Net Out MB': list(buf['net_tx'])
+                        })
 
+                if auto_refresh:
+                    import time
+                    time.sleep(4)
+                    st.rerun()
 
 # ════════════════════════════════════════════════════════════════════════════
 # TAB 9 — Risk Trends (NEW)
@@ -794,8 +1107,24 @@ with tab11:
                 f"security_report_{safe}.pdf", "application/pdf",
                 use_container_width=True
             )
-            st.success("✅ PDF ready!")
-            st.balloons()
+            st.markdown("""
+<div style="
+    text-align:center;
+    padding:20px;
+    background:#1a3322;
+    border-radius:12px;
+    border:1px solid #2d6a4f;
+    margin-top:10px;
+">
+    <div style="font-size:48px;">✅</div>
+    <div style="color:#a5d6a7;font-size:18px;font-weight:bold;margin-top:8px;">
+        Report Generated Successfully
+    </div>
+    <div style="color:#81c784;font-size:13px;margin-top:4px;">
+        Click the download button above to save your PDF
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.divider()

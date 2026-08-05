@@ -40,8 +40,9 @@ def ask_ai_question(question, findings_context, chat_history=None):
         "vulnerability scan results. You have access to the scan data below. "
         "Answer questions clearly and concisely based only on this data. "
         "If asked which vulnerability to fix first, prioritize Critical and "
-        "High severity items with available fixes. Keep answers under 150 words "
-        "unless the user asks for detail.\n\n"
+        "Keep answers under 150 words unless the user asks for detail. "
+        "Do not use markdown formatting, backticks, or code blocks in your response. "
+        "Write in plain conversational text only.\n\n"
         f"SCAN DATA:\n{findings_context}"
     )
 
