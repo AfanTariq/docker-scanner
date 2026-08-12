@@ -92,7 +92,7 @@ def generate_pdf_report(scan_target, findings, risk_score, counts, scan_type):
 
     # ── Header ─────────────────────────────────────────
     story.append(Paragraph("Docker Security Scanner", title_style))
-    story.append(Paragraph("CY256 — Secure Software Design and Development | Air University", subtitle_style))
+    story.append(Paragraph("Scan Report", subtitle_style))
     story.append(Paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", subtitle_style))
     story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#dddddd')))
     story.append(Spacer(1, 0.3*cm))
@@ -222,8 +222,7 @@ def generate_pdf_report(scan_target, findings, risk_score, counts, scan_type):
         width="100%", thickness=0.5, color=colors.HexColor('#dddddd')))
     story.append(Spacer(1, 0.2*cm))
     story.append(Paragraph(
-        "Docker Security Scanner — CY256 Project | "
-        "STRIDE Threat | Air University Islamabad",
+        "Scan Report",
         subtitle_style
     ))
 

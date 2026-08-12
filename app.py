@@ -543,11 +543,26 @@ with tab1:
 # ════════════════════════════════════════════════════════════════════════════
 with tab2:
     st.subheader("📄 Dockerfile Static Analysis")
-    method = st.radio("Input", ["Paste content","Upload file"], horizontal=True)
+    st.markdown(
+        "Checks your Dockerfile against **12 security rules** using static "
+        "analysis. Each violation shows the bad code, the secure fix, why it "
+        "matters, and which STRIDE threat category it maps to."
+    )
+
+    method = st.radio(
+        "Input", ["Paste content", "Upload file"], horizontal=True)
 
     df_content = None
     if method == "Paste content":
-        df_text = st.text_area("Paste Dockerfile", height=180)
+        df_text = st.text_area(
+            "Paste Dockerfile", height=180,
+            placeholder=(
+                "FROM ubuntu:latest\n"
+                "RUN apt-get install nginx\n"
+                "ENV DB_PASSWORD=admin123\n"
+                "EXPOSE 22\n"
+            )
+        )
         if df_text.strip():
             df_content = df_text
     else:
@@ -560,35 +575,81 @@ with tab2:
         if not df_content:
             st.warning("Please paste or upload a Dockerfile.")
         else:
+            # Clear previous results before new scan
+            st.session_state.pop('df_findings', None)
+            st.session_state.pop('df_score', None)
+            st.session_state.pop('df_counts', None)
+            st.session_state.pop('df_has_results', None)
+
             with tempfile.NamedTemporaryFile(
                 mode='w', suffix='', prefix='Dockerfile_',
                 delete=False, encoding='utf-8'
             ) as tmp:
                 tmp.write(df_content)
                 tmp_path = tmp.name
+
             findings, err = scan_dockerfile(tmp_path)
-            try: os.unlink(tmp_path)
-            except: pass
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
 
             if err:
-                st.error(f"❌ {err}")
+                st.error(f"❌ Parse error: {err}")
             elif not findings:
-                st.success("✅ No violations!")
+                # Store clean state
+                st.session_state['df_findings']    = []
+                st.session_state['df_score']       = 0
+                st.session_state['df_counts']      = {'Critical':0,'High':0,'Medium':0,'Low':0}
+                st.session_state['df_has_results'] = True
+                st.success("✅ No violations found — your Dockerfile looks secure!")
             else:
                 counts = count_by_severity(findings)
-                score  = calculate_risk_score(findings)
-                save_scan("Dockerfile", "Dockerfile Scan", findings, score, counts)
-                st.session_state.update({
-                    'df_findings': findings, 'df_score': score, 'df_counts': counts
-                })
-                st.success(f"✅ Found **{len(findings)}** violations")
+                # Dockerfile risk score uses different formula
+                # Max possible with 12 rules is much lower than CVE scans
+                df_weights = {
+                    'Critical': 25,
+                    'High':     15,
+                    'Medium':    8,
+                    'Low':       3
+                }
+                raw_score = sum(df_weights.get(f.get('severity','Low'), 3) for f in findings)
+                score = min(raw_score, 100)
 
-    if st.session_state.get('df_findings'):
+                save_scan("Dockerfile", "Dockerfile Scan", findings, score, counts)
+                st.session_state['df_findings']    = findings
+                st.session_state['df_score']       = score
+                st.session_state['df_counts']      = counts
+                st.session_state['df_has_results'] = True
+                st.success(f"✅ Scan complete — **{len(findings)}** violations found")
+
+    # Only show results if we have them from this session
+    if st.session_state.get('df_has_results') and st.session_state.get('df_findings') is not None:
         findings = st.session_state['df_findings']
-        st.divider()
-        render_metrics(findings)
-        st.divider()
-        render_findings(findings, prefix="df")
+        if findings:
+            st.divider()
+            counts  = st.session_state['df_counts']
+            score   = st.session_state['df_score']
+            fixable = len(get_fixable_findings(findings))
+
+            c1,c2,c3,c4,c5,c6 = st.columns(6)
+            c1.metric("🔴 Critical", counts['Critical'])
+            c2.metric("🟠 High",     counts['High'])
+            c3.metric("🟡 Medium",   counts['Medium'])
+            c4.metric("🟢 Low",      counts['Low'])
+            c5.metric("⚠️ Score",    f"{score}/100")
+            c6.metric("🔧 Fixable",  fixable)
+
+            if score > 70:
+                st.error(f"🔴 High Risk — Score {score}/100")
+            elif score > 40:
+                st.warning(f"🟠 Medium Risk — Score {score}/100")
+            else:
+                st.success(f"🟢 Low Risk — Score {score}/100")
+
+            st.progress(score / 100)
+            st.divider()
+            render_findings(findings, prefix="df")
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -635,69 +696,370 @@ with tab3:
 # ════════════════════════════════════════════════════════════════════════════
 with tab4:
     st.subheader("🔄 Compare Two Docker Images")
+    st.markdown(
+        "Scan two images side by side and compare their security posture. "
+        "Useful for comparing base images or different versions."
+    )
+
     col1, col2 = st.columns(2)
     with col1:
-        img_a = st.text_input("Image A", value="nginx:latest", key="cmp_a_in")
+        img_a = st.text_input(
+            "Image A", value="nginx:latest", key="cmp_a_in")
     with col2:
-        img_b = st.text_input("Image B", value="nginx:1.25.3-alpine", key="cmp_b_in")
+        img_b = st.text_input(
+            "Image B", value="nginx:1.25.3-alpine", key="cmp_b_in")
 
-    if st.button("🔄 Compare Images", type="primary"):
-        col1, col2 = st.columns(2)
-        with col1:
-            with st.spinner(f"Scanning {img_a}..."):
-                findings_a, err_a = scan_image_with_grype(img_a)
-            findings_a = findings_a if not err_a else []
-        with col2:
-            with st.spinner(f"Scanning {img_b}..."):
-                findings_b, err_b = scan_image_with_grype(img_b)
-            findings_b = findings_b if not err_b else []
+    if st.button("🔄 Compare Images", type="primary", key="cmp_btn"):
+        if not img_a or not img_b:
+            st.warning("Please enter both image names.")
+        else:
+            st.session_state.pop('cmp_a', None)
+            st.session_state.pop('cmp_b', None)
 
-        st.session_state['cmp_a'] = {'name': img_a, 'findings': findings_a}
-        st.session_state['cmp_b'] = {'name': img_b, 'findings': findings_b}
+            col1, col2 = st.columns(2)
+            with col1:
+                with st.spinner(f"Scanning {img_a}..."):
+                    findings_a, err_a = scan_image_with_grype(img_a)
+                if err_a:
+                    st.error(f"Image A error: {err_a}")
+                    findings_a = []
+                else:
+                    st.success(f"✅ {img_a} — {len(findings_a)} findings")
+
+            with col2:
+                with st.spinner(f"Scanning {img_b}..."):
+                    findings_b, err_b = scan_image_with_grype(img_b)
+                if err_b:
+                    st.error(f"Image B error: {err_b}")
+                    findings_b = []
+                else:
+                    st.success(f"✅ {img_b} — {len(findings_b)} findings")
+
+            st.session_state['cmp_a'] = {'name': img_a, 'findings': findings_a}
+            st.session_state['cmp_b'] = {'name': img_b, 'findings': findings_b}
 
     if st.session_state.get('cmp_a') and st.session_state.get('cmp_b'):
         da = st.session_state['cmp_a']
         db = st.session_state['cmp_b']
-        col1, col2 = st.columns(2)
+        fa = da['findings']
+        fb = db['findings']
 
-        def cmp_metrics(findings, name):
-            counts = count_by_severity(findings)
-            score  = calculate_risk_score(findings)
-            st.markdown(f"#### {name}")
-            c1,c2,c3,c4 = st.columns(4)
-            c1.metric("🔴", counts['Critical'])
-            c2.metric("🟠", counts['High'])
-            c3.metric("🟡", counts['Medium'])
-            c4.metric("🟢", counts['Low'])
-            st.metric("Score", f"{score}/100")
-            st.progress(score/100)
-            return score
-
-        with col1:
-            score_a = cmp_metrics(da['findings'], da['name'])
-        with col2:
-            score_b = cmp_metrics(db['findings'], db['name'])
+        counts_a = count_by_severity(fa)
+        counts_b = count_by_severity(fb)
+        score_a  = calculate_risk_score(fa)
+        score_b  = calculate_risk_score(fb)
 
         st.divider()
-        if score_a < score_b:
-            st.success(f"✅ **{da['name']}** is more secure")
-        elif score_b < score_a:
-            st.success(f"✅ **{db['name']}** is more secure")
+        st.markdown("### 📊 Side by Side Comparison")
+
+        # ── Image A card ──────────────────────────────────────────────────
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown(f"""
+            <div style="
+                background:#1e1e2e;
+                border:1px solid #333355;
+                border-radius:10px;
+                padding:16px 20px;
+                margin-bottom:10px;
+            ">
+                <div style="font-size:15px;font-weight:600;color:#90caf9;margin-bottom:12px;">
+                    🅰️ {da['name']}
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <div style="background:#3e1111;border-radius:6px;padding:10px;text-align:center;">
+                        <div style="color:#ef9a9a;font-size:11px;font-weight:500;">CRITICAL</div>
+                        <div style="color:#ffffff;font-size:24px;font-weight:700;">{counts_a['Critical']}</div>
+                    </div>
+                    <div style="background:#332200;border-radius:6px;padding:10px;text-align:center;">
+                        <div style="color:#ffcc80;font-size:11px;font-weight:500;">HIGH</div>
+                        <div style="color:#ffffff;font-size:24px;font-weight:700;">{counts_a['High']}</div>
+                    </div>
+                    <div style="background:#1a2744;border-radius:6px;padding:10px;text-align:center;">
+                        <div style="color:#90caf9;font-size:11px;font-weight:500;">MEDIUM</div>
+                        <div style="color:#ffffff;font-size:24px;font-weight:700;">{counts_a['Medium']}</div>
+                    </div>
+                    <div style="background:#1a3322;border-radius:6px;padding:10px;text-align:center;">
+                        <div style="color:#a5d6a7;font-size:11px;font-weight:500;">LOW</div>
+                        <div style="color:#ffffff;font-size:24px;font-weight:700;">{counts_a['Low']}</div>
+                    </div>
+                </div>
+                <div style="margin-top:12px;background:#0f0f1a;border-radius:6px;padding:10px;text-align:center;">
+                    <div style="color:#a0a0c0;font-size:11px;">RISK SCORE</div>
+                    <div style="color:{'#ef9a9a' if score_a > 70 else '#ffcc80' if score_a > 40 else '#a5d6a7'};font-size:28px;font-weight:700;">{score_a}/100</div>
+                    <div style="color:#555577;font-size:11px;">Total findings: {len(fa)}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # ── Image B card ──────────────────────────────────────────────────
+        with col2:
+            st.markdown(f"""
+            <div style="
+                background:#1e1e2e;
+                border:1px solid #333355;
+                border-radius:10px;
+                padding:16px 20px;
+                margin-bottom:10px;
+            ">
+                <div style="font-size:15px;font-weight:600;color:#ce93d8;margin-bottom:12px;">
+                    🅱️ {db['name']}
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <div style="background:#3e1111;border-radius:6px;padding:10px;text-align:center;">
+                        <div style="color:#ef9a9a;font-size:11px;font-weight:500;">CRITICAL</div>
+                        <div style="color:#ffffff;font-size:24px;font-weight:700;">{counts_b['Critical']}</div>
+                    </div>
+                    <div style="background:#332200;border-radius:6px;padding:10px;text-align:center;">
+                        <div style="color:#ffcc80;font-size:11px;font-weight:500;">HIGH</div>
+                        <div style="color:#ffffff;font-size:24px;font-weight:700;">{counts_b['High']}</div>
+                    </div>
+                    <div style="background:#1a2744;border-radius:6px;padding:10px;text-align:center;">
+                        <div style="color:#90caf9;font-size:11px;font-weight:500;">MEDIUM</div>
+                        <div style="color:#ffffff;font-size:24px;font-weight:700;">{counts_b['Medium']}</div>
+                    </div>
+                    <div style="background:#1a3322;border-radius:6px;padding:10px;text-align:center;">
+                        <div style="color:#a5d6a7;font-size:11px;font-weight:500;">LOW</div>
+                        <div style="color:#ffffff;font-size:24px;font-weight:700;">{counts_b['Low']}</div>
+                    </div>
+                </div>
+                <div style="margin-top:12px;background:#0f0f1a;border-radius:6px;padding:10px;text-align:center;">
+                    <div style="color:#a0a0c0;font-size:11px;">RISK SCORE</div>
+                    <div style="color:{'#ef9a9a' if score_b > 70 else '#ffcc80' if score_b > 40 else '#a5d6a7'};font-size:28px;font-weight:700;">{score_b}/100</div>
+                    <div style="color:#555577;font-size:11px;">Total findings: {len(fb)}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.divider()
+        st.markdown("### 🏆 Verdict")
+
+        # ── Clean verdict without confusing delta arrows ──────────────────
+        crit_diff  = counts_a['Critical'] - counts_b['Critical']
+        high_diff  = counts_a['High']     - counts_b['High']
+        total_diff = len(fa) - len(fb)
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if crit_diff > 0:
+                st.markdown(f"""<div style="background:#1a3322;border-radius:8px;padding:12px;text-align:center;">
+                    <div style="color:#a5d6a7;font-size:11px;font-weight:500;">CRITICAL FINDINGS</div>
+                    <div style="color:#ffffff;font-size:18px;font-weight:700;margin:4px 0;">🅱️ wins by {crit_diff}</div>
+                    <div style="color:#a0a0c0;font-size:12px;">{counts_b['Critical']} vs {counts_a['Critical']}</div>
+                </div>""", unsafe_allow_html=True)
+            elif crit_diff < 0:
+                st.markdown(f"""<div style="background:#1a3322;border-radius:8px;padding:12px;text-align:center;">
+                    <div style="color:#a5d6a7;font-size:11px;font-weight:500;">CRITICAL FINDINGS</div>
+                    <div style="color:#ffffff;font-size:18px;font-weight:700;margin:4px 0;">🅰️ wins by {abs(crit_diff)}</div>
+                    <div style="color:#a0a0c0;font-size:12px;">{counts_a['Critical']} vs {counts_b['Critical']}</div>
+                </div>""", unsafe_allow_html=True)
+            else:
+                st.markdown(f"""<div style="background:#1a2744;border-radius:8px;padding:12px;text-align:center;">
+                    <div style="color:#90caf9;font-size:11px;font-weight:500;">CRITICAL FINDINGS</div>
+                    <div style="color:#ffffff;font-size:18px;font-weight:700;margin:4px 0;">🤝 Tie</div>
+                    <div style="color:#a0a0c0;font-size:12px;">Both: {counts_a['Critical']}</div>
+                </div>""", unsafe_allow_html=True)
+
+        with col2:
+            if high_diff > 0:
+                st.markdown(f"""<div style="background:#1a3322;border-radius:8px;padding:12px;text-align:center;">
+                    <div style="color:#a5d6a7;font-size:11px;font-weight:500;">HIGH FINDINGS</div>
+                    <div style="color:#ffffff;font-size:18px;font-weight:700;margin:4px 0;">🅱️ wins by {high_diff}</div>
+                    <div style="color:#a0a0c0;font-size:12px;">{counts_b['High']} vs {counts_a['High']}</div>
+                </div>""", unsafe_allow_html=True)
+            elif high_diff < 0:
+                st.markdown(f"""<div style="background:#1a3322;border-radius:8px;padding:12px;text-align:center;">
+                    <div style="color:#a5d6a7;font-size:11px;font-weight:500;">HIGH FINDINGS</div>
+                    <div style="color:#ffffff;font-size:18px;font-weight:700;margin:4px 0;">🅰️ wins by {abs(high_diff)}</div>
+                    <div style="color:#a0a0c0;font-size:12px;">{counts_a['High']} vs {counts_b['High']}</div>
+                </div>""", unsafe_allow_html=True)
+            else:
+                st.markdown(f"""<div style="background:#1a2744;border-radius:8px;padding:12px;text-align:center;">
+                    <div style="color:#90caf9;font-size:11px;font-weight:500;">HIGH FINDINGS</div>
+                    <div style="color:#ffffff;font-size:18px;font-weight:700;margin:4px 0;">🤝 Tie</div>
+                    <div style="color:#a0a0c0;font-size:12px;">Both: {counts_a['High']}</div>
+                </div>""", unsafe_allow_html=True)
+
+        with col3:
+            if total_diff > 0:
+                st.markdown(f"""<div style="background:#1a3322;border-radius:8px;padding:12px;text-align:center;">
+                    <div style="color:#a5d6a7;font-size:11px;font-weight:500;">TOTAL FINDINGS</div>
+                    <div style="color:#ffffff;font-size:18px;font-weight:700;margin:4px 0;">🅱️ wins by {total_diff}</div>
+                    <div style="color:#a0a0c0;font-size:12px;">{len(fb)} vs {len(fa)}</div>
+                </div>""", unsafe_allow_html=True)
+            elif total_diff < 0:
+                st.markdown(f"""<div style="background:#1a3322;border-radius:8px;padding:12px;text-align:center;">
+                    <div style="color:#a5d6a7;font-size:11px;font-weight:500;">TOTAL FINDINGS</div>
+                    <div style="color:#ffffff;font-size:18px;font-weight:700;margin:4px 0;">🅰️ wins by {abs(total_diff)}</div>
+                    <div style="color:#a0a0c0;font-size:12px;">{len(fa)} vs {len(fb)}</div>
+                </div>""", unsafe_allow_html=True)
+            else:
+                st.markdown(f"""<div style="background:#1a2744;border-radius:8px;padding:12px;text-align:center;">
+                    <div style="color:#90caf9;font-size:11px;font-weight:500;">TOTAL FINDINGS</div>
+                    <div style="color:#ffffff;font-size:18px;font-weight:700;margin:4px 0;">🤝 Tie</div>
+                    <div style="color:#a0a0c0;font-size:12px;">Both: {len(fa)}</div>
+                </div>""", unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ── Overall winner banner ─────────────────────────────────────────
+        if counts_a['Critical'] < counts_b['Critical']:
+            st.markdown(f"""<div style="background:linear-gradient(90deg,#1a3322,#0d2218);border:1px solid #2d6a4f;border-radius:10px;padding:16px;text-align:center;">
+                <div style="font-size:20px;font-weight:700;color:#a5d6a7;">
+                    🏆 Overall Winner: 🅰️ {da['name']}
+                </div>
+                <div style="color:#81c784;font-size:13px;margin-top:6px;">
+                    Fewer Critical vulnerabilities — {counts_a['Critical']} vs {counts_b['Critical']}
+                </div>
+            </div>""", unsafe_allow_html=True)
+        elif counts_b['Critical'] < counts_a['Critical']:
+            st.markdown(f"""<div style="background:linear-gradient(90deg,#1a3322,#0d2218);border:1px solid #2d6a4f;border-radius:10px;padding:16px;text-align:center;">
+                <div style="font-size:20px;font-weight:700;color:#a5d6a7;">
+                    🏆 Overall Winner: 🅱️ {db['name']}
+                </div>
+                <div style="color:#81c784;font-size:13px;margin-top:6px;">
+                    Fewer Critical vulnerabilities — {counts_b['Critical']} vs {counts_a['Critical']}
+                </div>
+            </div>""", unsafe_allow_html=True)
+        elif len(fa) < len(fb):
+            st.markdown(f"""<div style="background:linear-gradient(90deg,#1a3322,#0d2218);border:1px solid #2d6a4f;border-radius:10px;padding:16px;text-align:center;">
+                <div style="font-size:20px;font-weight:700;color:#a5d6a7;">
+                    🏆 Overall Winner: 🅰️ {da['name']}
+                </div>
+                <div style="color:#81c784;font-size:13px;margin-top:6px;">
+                    Fewer total findings — {len(fa)} vs {len(fb)}
+                </div>
+            </div>""", unsafe_allow_html=True)
+        elif len(fb) < len(fa):
+            st.markdown(f"""<div style="background:linear-gradient(90deg,#1a3322,#0d2218);border:1px solid #2d6a4f;border-radius:10px;padding:16px;text-align:center;">
+                <div style="font-size:20px;font-weight:700;color:#a5d6a7;">
+                    🏆 Overall Winner: 🅱️ {db['name']}
+                </div>
+                <div style="color:#81c784;font-size:13px;margin-top:6px;">
+                    Fewer total findings — {len(fb)} vs {len(fa)}
+                </div>
+            </div>""", unsafe_allow_html=True)
         else:
-            st.info("Equal risk scores.")
+            st.markdown(f"""<div style="background:linear-gradient(90deg,#1a2744,#0d1a33);border:1px solid #2d4a7a;border-radius:10px;padding:16px;text-align:center;">
+                <div style="font-size:20px;font-weight:700;color:#90caf9;">
+                    🤝 Both images are equally vulnerable
+                </div>
+                <div style="color:#64b5f6;font-size:13px;margin-top:6px;">
+                    Consider switching to a minimal Alpine-based image
+                </div>
+            </div>""", unsafe_allow_html=True)
 
+        st.divider()
+        st.markdown("### 🔍 Unique CVEs per Image")
 
+        cves_a = {f.get('cve_id', '') for f in fa if f.get('cve_id')}
+        cves_b = {f.get('cve_id', '') for f in fb if f.get('cve_id')}
+        only_a = cves_a - cves_b
+        only_b = cves_b - cves_a
+        both   = cves_a & cves_b
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric(f"Only in A ({da['name'][:12]})", len(only_a))
+        c2.metric("Shared by both",                 len(both))
+        c3.metric(f"Only in B ({db['name'][:12]})", len(only_b))
+
+        if only_a:
+            with st.expander(
+                f"CVEs only in 🅰️ {da['name']} ({len(only_a)} unique)"
+            ):
+                cols = st.columns(3)
+                for i, cve in enumerate(sorted(only_a)[:30]):
+                    cols[i % 3].markdown(f"`{cve}`")
+
+        if only_b:
+            with st.expander(
+                f"CVEs only in 🅱️ {db['name']} ({len(only_b)} unique)"
+            ):
+                cols = st.columns(3)
+                for i, cve in enumerate(sorted(only_b)[:30]):
+                    cols[i % 3].markdown(f"`{cve}`")
+
+        if both:
+            with st.expander(
+                f"CVEs shared between both images ({len(both)})"
+            ):
+                cols = st.columns(3)
+                for i, cve in enumerate(sorted(both)[:30]):
+                    cols[i % 3].markdown(f"`{cve}`")
 # ════════════════════════════════════════════════════════════════════════════
 # TAB 5 — Secure Dockerfile Generator
 # ════════════════════════════════════════════════════════════════════════════
 with tab5:
     st.subheader("🏗️ Secure Dockerfile Generator")
-    gen_base = st.text_input("Base image", value="nginx:latest")
-    if st.button("🏗️ Generate", type="primary"):
-        secure_df, pinned = generate_secure_dockerfile(gen_base)
-        st.success(f"✅ Generated! `{gen_base}` → `{pinned}`")
+    st.markdown(
+        "Automatically generates a security-hardened Dockerfile template "
+        "based on your base image. All 12 security rules are applied."
+    )
+
+    gen_base = st.text_input(
+        "Base image",
+        value="nginx:latest",
+        placeholder="e.g. ubuntu, python, node, nginx",
+        key="gen_base_input"
+    )
+
+    if st.button("🏗️ Generate", type="primary", key="gen_btn"):
+        if not gen_base.strip():
+            st.warning("Enter a base image name first.")
+        else:
+            secure_df, pinned = generate_secure_dockerfile(gen_base)
+            st.session_state['gen_dockerfile'] = secure_df
+            st.session_state['gen_pinned']     = pinned
+            st.session_state['gen_base']       = gen_base
+            st.success(f"✅ Generated! `{gen_base}` pinned to `{pinned}`")
+
+    # Only show output if generated in this session
+    if st.session_state.get('gen_dockerfile'):
+        secure_df = st.session_state['gen_dockerfile']
+        pinned    = st.session_state['gen_pinned']
+        gen_base  = st.session_state['gen_base']
+
+        st.divider()
+        st.markdown("### Generated Secure Dockerfile")
         st.code(secure_df, language='dockerfile')
-        st.download_button("⬇️ Download", secure_df, "Dockerfile.secure", "text/plain")
+
+        st.download_button(
+            label="⬇️ Download Secure Dockerfile",
+            data=secure_df,
+            file_name="Dockerfile.secure",
+            mime="text/plain",
+            use_container_width=True,
+            key="dl_secure_df"
+        )
+
+        st.divider()
+        st.markdown("### ✅ Security Rules Applied")
+
+        rules_applied = [
+            "✅ Rule 3  — Port 22 not exposed (EXPOSE 22 removed)",
+            "✅ Rule 4  — COPY used instead of ADD",
+            "✅ Rule 11 — WORKDIR set to /app",
+            "✅ Rule 12 — LABEL metadata added for audit trail",
+        ]
+        is_alpine = 'alpine' in pinned.lower()
+        if pinned != gen_base:
+            rules_applied.insert(0, f"✅ Rule 5  — Image pinned: {gen_base} → {pinned}")
+        else:
+            rules_applied.insert(0, f"⚠️ Rule 5  — Could not auto-pin {gen_base} (add manually)")
+        rules_applied.append("✅ Rule 6  — HEALTHCHECK included")
+        rules_applied.append("✅ Rule 7  — --no-install-recommends used")
+        rules_applied.append("✅ Rule 9  — apt-get update before install")
+        rules_applied.append("✅ Rule 1  — Non-root USER appuser created")
+
+        for r in rules_applied:
+            st.markdown(r)
+
+        st.divider()
+        st.info(
+            "💡 **Next step:** Copy the generated Dockerfile content, "
+            "paste it in the **Dockerfile Rules** tab and click Scan "
+            "to verify it passes all 12 checks."
+        )
 
 
 # ════════════════════════════════════════════════════════════════════════════
